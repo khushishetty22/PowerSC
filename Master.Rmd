@@ -1,0 +1,1664 @@
+```{r}
+# Load the necessary libraries
+library(arrow)
+library(dplyr)
+
+# Correct the URL if necessary to remove spaces or encode them
+url <- "https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/static_house_info.parquet"
+
+# Read the Parquet file directly from the URL
+static_house_data <- read_parquet(url)
+
+# View the first few rows of the dataframe
+head(static_house_data)
+
+```
+
+```{r}
+# Filter data for county G4500410 and select specified columns
+filtered_data <- static_house_data %>%
+  filter(in.county == "G4500410") %>%
+  select(
+    bldg_id, in.sqft, in.bedrooms, in.geometry_stories,
+    in.hvac_cooling_type, in.hvac_heating_type, in.hvac_heating_efficiency, 
+    in.hvac_cooling_efficiency, in.hvac_has_ducts,in.county, in.occupants
+  )
+
+head(filtered_data)
+
+colnames(filtered_data)
+
+file_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Static_House_data/house_data_filtered.csv"
+
+# Save the filtered dataframe as a CSV file
+write.csv(filtered_data, file_path, row.names = FALSE)
+```
+
+```{r}
+# Load the necessary libraries
+library(arrow)
+library(dplyr)
+library(readr)
+library(tidyr)
+
+# Read the Parquet file directly from the URL
+weather_data <- read_csv("https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/weather/2023-weather-data/G4500410.csv")
+
+# View the first few rows of the dataframe
+head(weather_data)
+
+colnames(weather_data)
+
+file_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Weather/weather_data.csv"
+
+# Save the filtered dataframe as a CSV file
+write.csv(weather_data, file_path, row.names = FALSE)
+```
+
+```{r}
+# Load necessary libraries
+library(arrow)
+library(dplyr)
+library(readr)
+library(purrr)
+library(lubridate)
+
+# Set the path for the house data and read it
+house_data_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Static_House_data/house_data_filtered.csv"
+house_data <- read_csv(house_data_path)
+
+# Define the function to load, filter, and augment energy data for a given building ID
+load_and_filter_energy <- function(bldg_id) {
+  file_url <- paste0("https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/2023-houseData/", bldg_id, ".parquet")
+  energy_data <- arrow::read_parquet(file_url)
+  
+  # Convert time column to Date/Time class
+  energy_data$time <- ymd_hms(energy_data$time)
+  
+  # Filter data from April to July
+  energy_data <- energy_data %>%
+    filter(month(time) >= 4 & month(time) <= 7)
+
+  # Add bldg_id column
+  energy_data$bldg_id <- bldg_id
+  
+  return(energy_data)
+}
+
+# Apply the function to each building ID, combining the results into one dataframe
+combined_energy_data <- house_data$bldg_id %>%
+  map_df(~load_and_filter_energy(.))
+
+colnames(energy_data)
+
+# Define the file path for saving the combined energy data
+save_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Energy/energy_data.csv"
+
+# Save the combined dataframe as a CSV file
+write_csv(combined_energy_data, save_path, col_names = TRUE)
+
+# Print a message upon successful completion
+print("Energy data has been successfully saved.")
+
+```
+
+```{r}
+library(dplyr)
+library(readr)
+
+# Load combined energy data
+energy_data_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Energy/energy_data.csv"
+energy_data <- read_csv(energy_data_path)
+
+# Summarize energy consumption by category and add Heating and Cooling
+energy_data_summarized <- energy_data %>%
+  mutate(
+    electricity = rowSums(select(., contains("electricity")), na.rm = TRUE),
+    fuel = rowSums(select(., contains("fuel_oil")), na.rm = TRUE),
+    natural_gas = rowSums(select(., contains("natural_gas")), na.rm = TRUE),
+    propane = rowSums(select(., contains("propane")), na.rm = TRUE),
+    Heating = rowSums(select(., matches("heating|hot_water|pool_heater|hot_tub_heater")), na.rm = TRUE),
+    Cooling = rowSums(select(., matches("cooling|ceiling_fan")), na.rm = TRUE)
+  ) %>%
+  select(time, bldg_id, electricity, fuel, natural_gas, propane, Heating, Cooling) %>%
+  group_by(time, bldg_id) %>%
+  summarise(
+    electricity = sum(electricity, na.rm = TRUE),
+    fuel = sum(fuel, na.rm = TRUE),
+    natural_gas = sum(natural_gas, na.rm = TRUE),
+    propane = sum(propane, na.rm = TRUE),
+    Heating = sum(Heating, na.rm = TRUE),
+    Cooling = sum(Cooling, na.rm = TRUE),
+    total_energy = electricity + fuel + natural_gas + propane
+  )
+
+colnames(energy_data_summarized)
+# Save the summarized data
+write_csv(energy_data_summarized, "C:/Users/puroh/OneDrive/Documents/IDS/Energy/energy_data_final.csv")
+
+# Print a confirmation message
+print("Summarized energy data has been successfully saved with additional Heating and Cooling aggregates.")
+```
+
+```{r}
+# Load the necessary libraries
+library(dplyr)
+library(readr)
+library(lubridate)
+
+# Read the CSV file directly from the URL
+weather_data <- read_csv("https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/weather/2023-weather-data/G4500410.csv")
+
+# Convert date_time column to Date/Time class
+weather_data$date_time <- ymd_hms(weather_data$date_time)
+
+# Filter the data for the months of April to July
+filtered_weather_data <- weather_data %>% 
+  filter(month(date_time) >= 4 & month(date_time) <= 7)
+
+# Rename the column 'date_time' to 'time'
+filtered_weather_data <- filtered_weather_data %>%
+  rename(time = date_time)
+
+# View the first few rows of the dataframe
+head(filtered_weather_data)
+
+# Define the file path (Adjust the file path as necessary for your system)
+file_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Weather/weather_data_filtered.csv"
+
+# Save the filtered dataframe as a CSV file
+write_csv(filtered_weather_data, file_path, col_names = TRUE)
+
+# Print a message upon successful completion
+print("Filtered weather data has been successfully saved.")
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Set the working directory to where your dataset is located
+setwd("C:/Users/puroh/OneDrive/Documents/IDS/Static_House_data")
+
+# Read the dataset
+house_data <- read.csv("house_data_filtered.csv")
+
+# View the structure of the dataset
+str(house_data)
+summary(house_data)
+
+# Histogram of Square Footage
+ggplot(house_data, aes(x = in.sqft)) +
+  geom_histogram(bins = 30, fill = "cornflowerblue") +
+  labs(title = "Distribution of Square Footage", x = "Square Footage", y = "Count")
+
+# Scatter plot of Square Footage vs. Bedrooms
+ggplot(house_data, aes(x = in.sqft, y = in.bedrooms)) +
+  geom_point(aes(color = in.geometry_stories), size = 3) +
+  labs(title = "Square Footage vs. Bedrooms by Number of Stories",
+       x = "Square Footage", y = "Number of Bedrooms") +
+  scale_color_gradient(low = "blue", high = "red")
+
+# Bar plot of HVAC Cooling Types
+ggplot(house_data, aes(x = in.hvac_cooling_type)) +
+  geom_bar(fill = "steelblue") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Distribution of HVAC Cooling Types", x = "HVAC Cooling Type", y = "Count")
+
+# Bar plot of HVAC Heating Types
+ggplot(house_data, aes(x = in.hvac_heating_type)) +
+  geom_bar(fill = "darkgreen") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Distribution of HVAC Heating Types", x = "HVAC Heating Type", y = "Count")
+
+# Boxplot for HVAC Efficiency Ratings (Cooling)
+ggplot(house_data, aes(x = in.hvac_cooling_efficiency, y = in.sqft)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(title = "Cooling Efficiency Ratings vs. Square Footage", x = "Cooling Efficiency", y = "Square Footage")
+
+# Boxplot for HVAC Efficiency Ratings (Heating)
+ggplot(house_data, aes(x = in.hvac_heating_efficiency, y = in.sqft)) +
+  geom_boxplot(fill = "lightgreen") +
+  labs(title = "Heating Efficiency Ratings vs. Square Footage", x = "Heating Efficiency", y = "Square Footage")
+
+# Save all plots to a PDF file
+ggsave("house_data_eda.pdf")
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(openair)   # For wind rose plot
+
+# Set the working directory to where your dataset is located
+setwd("C:/Users/puroh/OneDrive/Documents/IDS/Static_House_data")
+
+# Read the dataset
+weather_data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Weather/weather_data_filtered.csv")
+
+# Convert time column to POSIXct date-time format
+weather_data$time <- ymd_hms(weather_data$time)
+
+# Summary of the dataset
+summary(weather_data)
+
+colnames(weather_data)
+# Time Series Plot for Temperature and Humidity
+ggplot(weather_data, aes(x = time)) +
+  geom_line(aes(y = `Dry Bulb Temperature [°C]`, colour = "Temperature")) +
+  geom_line(aes(y = `Relative Humidity [%]`, colour = "Humidity")) +
+  scale_colour_manual("", 
+                      breaks = c("Temperature", "Humidity"),
+                      values = c("red", "blue")) +
+  labs(title = "Temperature and Humidity Over Time", x = "Time", y = "Measure") +
+  theme_minimal()
+
+# Wind Rose for Wind Direction and Speed
+wind_rose_data <- weather_data %>%
+  select(Wind_Speed = `Wind Speed [m/s]`, Wind_Direction = `Wind Direction [Deg]`)
+windRose(wind_rose_data, ws = "Wind_Speed", wd = "Wind_Direction",
+         main = "Wind Rose", speed.cuts = seq(0, 12, 2), angle = 30)
+
+
+
+```
+
+```{r}
+library(dplyr)
+library(readr)
+
+# Load datasets
+house_data_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Static_House_data/house_data_filtered.csv"
+weather_data_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Weather/weather_data_filtered.csv"
+energy_data_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Energy/energy_data_final.csv"
+
+# Read the data from the CSV files
+house_data <- read_csv(house_data_path)
+weather_data <- read_csv(weather_data_path)
+energy_data <- read_csv(energy_data_path)
+
+# Merge Energy data with Weather data on the 'time' column
+energy_weather_merged <- merge(energy_data, weather_data, by = "time", all = TRUE)
+
+# Merge the above result with House data on the 'bldg_id' column
+final_merged_data <- merge(energy_weather_merged, house_data, by = "bldg_id", all = TRUE)
+
+# Optionally, inspect the first few rows of the merged dataset
+print(head(final_merged_data))
+
+colnames(final_merged_data)
+
+# Save the final merged dataset
+write_csv(final_merged_data, "C:/Users/puroh/OneDrive/Documents/IDS/Final/Merged_Dataset.csv")
+
+# Print a confirmation message
+print("All datasets have been successfully merged and saved.")
+
+```
+```{r}
+# Load necessary library
+library(readr)
+
+# Read the dataset
+dataset <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/Merged_Dataset.csv")
+
+# Generate valid R names and assign them to the column names of the dataset
+colnames(dataset) <- make.names(colnames(dataset), unique = TRUE)
+
+# Print the new column names to verify
+print(colnames(dataset))
+
+# Optionally, you can write the modified dataset to a new CSV file
+write_csv(dataset, "C:/Users/puroh/OneDrive/Documents/IDS/Final/Cleaned_Merged_Dataset.csv")
+
+```
+Step 2: Exploratory Data Analysis (EDA)
+
+a. Energy consumption trends over the days of July.
+b. The relationship between temperature, humidity, and energy usage.
+c. HVAC system types and their impact on energy consumption.
+
+
+```{r}
+
+
+# Load the dataset
+library(readr)
+data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/Cleaned_Merged_Dataset.csv")
+```
+
+
+```{r}
+# View the first few rows of the dataset
+head(data)
+
+# Summary of the dataset
+summary(data)
+
+# Structure of the dataset
+str(data)
+```
+
+```{r}
+# Check for NA values
+sum(is.na(data))
+
+# Optionally, remove rows with NA values if they are not numerous
+# data <- na.omit(data)
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Summarizing total energy, heating, and cooling consumption
+energy_summary <- data %>%
+  group_by(time) %>%
+  summarise(Total_Energy = sum(total_energy),
+            Total_Heating = sum(Heating),
+            Total_Cooling = sum(Cooling))
+
+# Plotting total energy vs heating and cooling
+ggplot(energy_summary, aes(x = time)) +
+  geom_line(aes(y = Total_Heating, colour = "Heating")) +
+  geom_line(aes(y = Total_Cooling, colour = "Cooling")) +
+  labs(title = "Energy Consumption Over Time", x = "Time", y = "Energy (kWh)") +
+  theme_minimal() +
+  scale_color_manual(values = c("Heating" = "red", "Cooling" = "blue"))
+
+```
+
+```{r}
+# Temperature effect on Heating and Cooling
+ggplot(data, aes(x = Dry.Bulb.Temperature...C.)) +
+  geom_smooth(aes(y = Heating, colour = "Heating"), method = "lm") +
+  geom_smooth(aes(y = Cooling, colour = "Cooling"), method = "lm") +
+  labs(title = "Effect of Temperature on Heating and Cooling", x = "Temperature (°C)", y = "Energy (kWh)") +
+  scale_color_manual(values = c("Heating" = "red", "Cooling" = "blue"))
+
+```
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Assuming data is already loaded and appropriate libraries are loaded
+# Summarizing total energy by HVAC type for better visualization
+data_grouped <- data %>%
+  group_by(in.hvac_heating_type, in.hvac_cooling_type) %>%
+  summarise(Total_Heating = sum(Heating), Total_Cooling = sum(Cooling), Total_Energy = sum(total_energy), .groups = 'drop')
+
+# Horizontal Bar Plot for Heating by HVAC Heating Type
+ggplot(data_grouped, aes(y = reorder(in.hvac_heating_type, Total_Heating), x = Total_Heating, fill = in.hvac_heating_type)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~in.hvac_cooling_type, scales = "free_y") +
+  labs(title = "Total Heating by HVAC Heating Type", x = "Total Heating Energy (kWh)", y = "HVAC Heating Type") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1))  # Adjust text angle for better legibility
+
+# Horizontal Bar Plot for Cooling by HVAC Cooling Type
+ggplot(data_grouped, aes(y = reorder(in.hvac_cooling_type, Total_Cooling), x = Total_Cooling, fill = in.hvac_cooling_type)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~in.hvac_heating_type, scales = "free_y") +
+  labs(title = "Total Cooling by HVAC Cooling Type", x = "Total Cooling Energy (kWh)", y = "HVAC Cooling Type") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1))  # Adjust text angle for better legibility
+
+```
+
+
+
+Step 3: Feature Engineering
+Time Features: Hour of the day, day of the week (weekend vs. weekday), which can capture daily and weekly cycles in energy usage.
+Weather Interactions: Interactions between temperature, humidity, and solar radiation that might affect energy needs.
+
+Hourly Breakdowns: Identifies the hour of the day which could capture diurnal energy usage patterns.
+Weekday vs. Weekend: Distinguishes between weekdays and weekends to capture potential variances in energy consumption patterns.
+Temperature-Humidity Interaction: Reflects the combined effect of temperature and humidity, which may impact HVAC energy needs.
+Temperature-Wind Speed Interaction: Accounts for the effect of wind cooling, potentially reducing cooling energy requirements.
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(lubridate)
+
+# Assuming your dataset is named 'data'
+# Convert your time column to POSIXct if it's not already
+data$time <- as.POSIXct(data$time, format = "%Y-%m-%d %H:%M:%S")
+
+# Feature Engineering
+data_feature <- data %>%
+  mutate(
+    # Hourly Breakdown
+    Hour = hour(time),
+    
+    # Weekday vs. Weekend (1 for weekend, 0 for weekday)
+    Weekend = ifelse(weekdays(time) %in% c("Saturday", "Sunday"), 1, 0),
+    
+    # Temperature-Humidity Interaction
+    Temp_Humidity_Interaction = Dry.Bulb.Temperature...C. * Relative.Humidity....,
+    
+    # Temperature-Wind Speed Interaction
+    Temp_WindSpeed_Interaction = Dry.Bulb.Temperature...C. * Wind.Speed..m.s.
+  )
+
+# Viewing the first few rows to confirm new features
+head(data_feature)
+
+```
+
+```{r}
+library(ggplot2)
+
+# Hourly energy consumption pattern
+ggplot(data_feature, aes(x = Hour, y = total_energy)) +
+  geom_line(stat = "summary", fun = "mean") +
+  labs(title = "Average Hourly Energy Consumption",
+       x = "Hour of the Day",
+       y = "Average Energy Consumption (kWh)") +
+  theme_minimal()
+
+```
+
+```{r}
+# Weekday vs. Weekend energy consumption
+ggplot(data_feature, aes(x = as.factor(Weekend), y = total_energy)) +
+  geom_boxplot() +
+  scale_x_discrete(labels = c("0" = "Weekday", "1" = "Weekend")) +
+  labs(title = "Energy Consumption: Weekday vs Weekend",
+       x = "",
+       y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+```
+
+```{r}
+# Temperature-Humidity Interaction
+ggplot(data_feature, aes(x = Temp_Humidity_Interaction, y = total_energy)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "blue", se = FALSE) +
+  labs(title = "Energy Consumption vs Temperature-Humidity Interaction",
+       x = "Temperature-Humidity Interaction",
+       y = "Total Energy Consumption (kWh)") +
+  theme_minimal()
+
+```
+
+```{r}
+# Temperature-Wind Speed Interaction
+ggplot(data_feature, aes(x = Temp_WindSpeed_Interaction, y = total_energy)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Energy Consumption vs Temperature-Wind Speed Interaction",
+       x = "Temperature-Wind Speed Interaction",
+       y = "Total Energy Consumption (kWh)") +
+  theme_minimal()
+
+```
+
+```{r}
+# Load the necessary libraries
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+# Load the dataset
+data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/Cleaned_Merged_Dataset.csv")
+
+colnames(data)
+
+# Convert the 'time' column to a datetime format, if it's not already
+data$time <- as.POSIXct(data$time, format = "%Y-%m-%d %H:%M:%S")
+
+# Ensure that HVAC types are factors
+data$in.hvac_cooling_type <- as.factor(data$in.hvac_cooling_type)
+data$in.hvac_heating_type <- as.factor(data$in.hvac_heating_type)
+
+# Create a new column 'Month' to filter by
+data <- data %>%
+  mutate(Month = month(time))
+
+# Splitting the dataset
+train_data <- data %>% filter(Month != 7)
+test_data <- data %>% filter(Month == 7)
+
+# Building the model for Heating
+model_heating <- lm(Heating ~ time + electricity + fuel + natural_gas + propane + 
+                      Dry.Bulb.Temperature...C. + Relative.Humidity.... + Wind.Speed..m.s. +
+                      in.sqft + in.bedrooms + in.geometry_stories + in.hvac_cooling_type +
+                      in.hvac_heating_type + in.hvac_heating_efficiency + 
+                      in.hvac_cooling_efficiency + in.hvac_has_ducts + in.occupants, data = train_data)
+
+# Building the model for Cooling
+model_cooling <- lm(Cooling ~ time + electricity + fuel + natural_gas + propane + 
+                      Dry.Bulb.Temperature...C. + Relative.Humidity.... + Wind.Speed..m.s. +
+                      in.sqft + in.bedrooms + in.geometry_stories + in.hvac_cooling_type +
+                      in.hvac_heating_type + in.hvac_heating_efficiency + 
+                      in.hvac_cooling_efficiency + in.hvac_has_ducts + in.occupants, data = train_data)
+
+# Making predictions for the test set (July)
+test_data$predicted_heating <- predict(model_heating, newdata = test_data)
+test_data$predicted_cooling <- predict(model_cooling, newdata = test_data)
+
+# Visualization for Heating
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = Heating), color = 'blue') +
+  geom_line(aes(y = predicted_heating), color = 'red') +
+  labs(title = "Actual vs Predicted Heating Energy Consumption for July",
+       x = "Time",
+       y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Visualization for Cooling
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = Cooling), color = 'green') +
+  geom_line(aes(y = predicted_cooling), color = 'orange') +
+  labs(title = "Actual vs Predicted Cooling Energy Consumption for July",
+       x = "Time",
+       y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Create a dataframe with actual and predicted values for July
+july_comparison <- test_data %>%
+  select(time, Heating, predicted_heating, Cooling, predicted_cooling)
+
+# Display the dataframe
+print(july_comparison)
+
+```
+
+```{r}
+# Load the necessary library for metrics
+library(Metrics)
+
+# Actual vs Predicted for Heating
+actual_heating <- test_data$Heating
+predicted_heating <- test_data$predicted_heating
+
+# Metrics for Heating Model
+mse_heating <- mse(actual_heating, predicted_heating)
+rmse_heating <- sqrt(mse_heating)
+mae_heating <- mae(actual_heating, predicted_heating)
+r2_heating <- cor(actual_heating, predicted_heating)^2
+
+# Print Heating Model Metrics
+cat("Heating Model Metrics:\n")
+cat("MSE:", mse_heating, "\n")
+cat("RMSE:", rmse_heating, "\n")
+cat("MAE:", mae_heating, "\n")
+cat("R-squared:", r2_heating, "\n\n")
+
+# Actual vs Predicted for Cooling
+actual_cooling <- test_data$Cooling
+predicted_cooling <- test_data$predicted_cooling
+
+# Metrics for Cooling Model
+mse_cooling <- mse(actual_cooling, predicted_cooling)
+rmse_cooling <- sqrt(mse_cooling)
+mae_cooling <- mae(actual_cooling, predicted_cooling)
+r2_cooling <- cor(actual_cooling, predicted_cooling)^2
+
+# Print Cooling Model Metrics
+cat("Cooling Model Metrics:\n")
+cat("MSE:", mse_cooling, "\n")
+cat("RMSE:", rmse_cooling, "\n")
+cat("MAE:", mae_cooling, "\n")
+cat("R-squared:", r2_cooling, "\n")
+
+```
+```{r}
+# Load the necessary libraries
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(Metrics)
+
+# Load the dataset
+data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/Cleaned_Merged_Dataset.csv")
+
+# Convert the 'time' column to a datetime format
+data$time <- as.POSIXct(data$time, format = "%Y-%m-%d %H:%M:%S")
+
+# Ensure that HVAC types and other categorical variables are factors
+data$in.hvac_cooling_type <- as.factor(data$in.hvac_cooling_type)
+data$in.hvac_heating_type <- as.factor(data$in.hvac_heating_type)
+data$in.hvac_has_ducts <- as.factor(data$in.hvac_has_ducts)
+
+# Check each factor variable to make sure it has more than one level
+factor_vars <- c("in.hvac_cooling_type", "in.hvac_heating_type", "in.hvac_has_ducts")
+
+# Print the number of levels for each factor
+for (var in factor_vars) {
+  cat(var, "levels:", nlevels(data[[var]]), "\n")
+}
+
+# Filter out factor variables with just one level from the model
+factor_vars_to_keep <- factor_vars[sapply(data[factor_vars], nlevels) > 1]
+formula_vars <- c("time", "Heating", "Cooling", "Dry.Bulb.Temperature...C.", "Relative.Humidity....",
+                  "Wind.Speed..m.s.", "Global.Horizontal.Radiation..W.m2.", "Direct.Normal.Radiation..W.m2.",
+                  "Diffuse.Horizontal.Radiation..W.m2.", "in.sqft", "in.bedrooms", "in.geometry_stories",
+                  "in.hvac_heating_efficiency", "in.hvac_cooling_efficiency", "in.hvac_has_ducts")
+
+# Add the selected factor variables to the formula variables
+formula_vars <- c(formula_vars, factor_vars_to_keep)
+
+# Create the regression formula for total_energy
+regression_formula_total_energy <- as.formula(paste("total_energy ~", paste(formula_vars, collapse = " + ")))
+
+# Create a new column 'Month' to filter by
+data <- data %>%
+  mutate(Month = month(time))
+
+# Split the dataset into train and test (July)
+train_data <- data %>% filter(Month != 7)
+test_data <- data %>% filter(Month == 7)
+
+# Build the model using the train_data
+model_total_energy <- lm(regression_formula_total_energy, data = train_data)
+
+# Make predictions on the test_data
+test_data$predicted_total_energy <- predict(model_total_energy, newdata = test_data)
+
+# Visualization for Total Energy
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = total_energy), color = 'blue') +
+  geom_line(aes(y = predicted_total_energy), color = 'red') +
+  labs(title = "Actual vs Predicted Total Energy Consumption for July",
+       x = "Time", y = "Total Energy (kWh)") +
+  theme_minimal()
+
+# Metrics calculation for Total Energy
+actual_total_energy <- test_data$total_energy
+predicted_total_energy <- test_data$predicted_total_energy
+mse_total_energy <- mse(actual_total_energy, predicted_total_energy)
+rmse_total_energy <- sqrt(mse_total_energy)
+mae_total_energy <- mae(actual_total_energy, predicted_total_energy)
+r2_total_energy <- cor(actual_total_energy, predicted_total_energy)^2
+
+# Output the metrics
+cat("Total Energy Model Metrics for July:\n")
+cat("MSE:", mse_total_energy, "\n")
+cat("RMSE:", rmse_total_energy, "\n")
+cat("MAE:", mae_total_energy, "\n")
+cat("R-squared:", r2_total_energy, "\n")
+
+# Create and display a dataframe with actual and predicted values for July
+july_comparison <- test_data %>%
+  select(time, total_energy, predicted_total_energy)
+print(july_comparison)
+
+```
+
+```{r}
+  # Adjust the temperature in the July test dataset by 5 degrees
+test_data_increased_temp <- test_data %>%
+  mutate(`Dry.Bulb.Temperature...C.` = `Dry.Bulb.Temperature...C.` + 5)
+
+# Use the existing models to predict with the new test data
+test_data_increased_temp$predicted_heating <- predict(model_heating, newdata = test_data_increased_temp)
+test_data_increased_temp$predicted_cooling <- predict(model_cooling, newdata = test_data_increased_temp)
+
+# Save the new weather test data for July with increased temperature to CSV
+write_csv(test_data_increased_temp, "C:/Users/puroh/OneDrive/Documents/IDS/Final/test_july_increased.csv")
+
+# Print a message that the file has been saved
+cat("The new weather test data for July with increased temperature has been saved at C:/Users/puroh/OneDrive/Documents/IDS/Final/test_july_increased.csv")
+
+```
+
+```{r}
+# Load the necessary libraries
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(Metrics)
+
+# Load the training dataset
+train_data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/Cleaned_Merged_Dataset.csv")
+
+# Convert the 'time' column to a datetime format
+train_data$time <- as.POSIXct(train_data$time, format = "%Y-%m-%d %H:%M:%S")
+
+# Ensure that HVAC types and other categorical variables are factors
+train_data$in.hvac_cooling_type <- as.factor(train_data$in.hvac_cooling_type)
+train_data$in.hvac_heating_type <- as.factor(train_data$in.hvac_heating_type)
+train_data$in.hvac_has_ducts <- as.factor(train_data$in.hvac_has_ducts)
+
+# Check each factor variable to make sure it has more than one level
+factor_vars <- c("in.hvac_cooling_type", "in.hvac_heating_type", "in.hvac_has_ducts")
+
+# Print the number of levels for each factor
+for (var in factor_vars) {
+  cat(var, "levels:", nlevels(train_data[[var]]), "\n")
+}
+
+# Filter out factor variables with just one level from the model
+factor_vars_to_keep <- factor_vars[sapply(train_data[factor_vars], nlevels) > 1]
+formula_vars <- c("time", "electricity", "fuel", "natural_gas", "propane", "total_energy", 
+                  "Dry.Bulb.Temperature...C.", "Relative.Humidity....", "Wind.Speed..m.s.",
+                  "in.sqft", "in.bedrooms", "in.geometry_stories", "in.hvac_heating_efficiency",
+                  "in.hvac_cooling_efficiency", "in.occupants")
+formula_vars <- c(formula_vars, factor_vars_to_keep)
+
+# Create the regression formula
+regression_formula_heating <- as.formula(paste("Heating ~", paste(formula_vars, collapse = " + ")))
+regression_formula_cooling <- as.formula(paste("Cooling ~", paste(formula_vars, collapse = " + ")))
+
+# Split the training dataset (excluding July)
+train_data <- train_data %>% 
+  mutate(Month = month(time)) %>%
+  filter(Month != 7)
+
+# Load the new test dataset for July with the increased temperature
+test_data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/test_july_increased.csv")
+test_data$time <- as.POSIXct(test_data$time, format = "%Y-%m-%d %H:%M:%S")
+test_data$`Dry.Bulb.Temperature...C.` <- test_data$`Dry.Bulb.Temperature...C.` + 5
+
+# Ensure consistency of factor levels between train and test data
+for (var in factor_vars_to_keep) {
+  levels(test_data[[var]]) <- levels(train_data[[var]])
+}
+
+# Build the models using the train_data
+model_heating <- lm(regression_formula_heating, data = train_data)
+model_cooling <- lm(regression_formula_cooling, data = train_data)
+
+# Make predictions on the test_data
+test_data$predicted_heating <- predict(model_heating, newdata = test_data)
+test_data$predicted_cooling <- predict(model_cooling, newdata = test_data)
+
+# Visualization
+# Visualization for Heating
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = Heating), color = 'blue') +
+  geom_line(aes(y = predicted_heating), color = 'red') +
+  labs(title = "Actual vs Predicted Heating Energy Consumption for July",
+       x = "Time",
+       y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Visualization for Cooling
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = Cooling), color = 'green') +
+  geom_line(aes(y = predicted_cooling), color = 'orange') +
+  labs(title = "Actual vs Predicted Cooling Energy Consumption for July",
+       x = "Time",
+       y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Metrics calculation for heating
+actual_heating <- test_data$Heating
+predicted_heating <- test_data$predicted_heating
+mse_heating <- mse(actual_heating, predicted_heating)
+rmse_heating <- sqrt(mse_heating)
+mae_heating <- mae(actual_heating, predicted_heating)
+r2_heating <- cor(actual_heating, predicted_heating)^2
+
+# Metrics calculation for cooling
+actual_cooling <- test_data$Cooling
+predicted_cooling <- test_data$predicted_cooling
+mse_cooling <- mse(actual_cooling, predicted_cooling)
+rmse_cooling <- sqrt(mse_cooling)
+mae_cooling <- mae(actual_cooling, predicted_cooling)
+r2_cooling <- cor(actual_cooling, predicted_cooling)^2
+
+# Output the metrics
+cat("Heating Model Metrics with Increased Temperature:\n")
+cat("MSE:", mse_heating, "\n")
+cat("RMSE:", rmse_heating, "\n")
+cat("MAE:", mae_heating, "\n")
+cat("R-squared:", r2_heating, "\n\n")
+
+cat("Cooling Model Metrics with Increased Temperature:\n")
+cat("MSE:", mse_cooling, "\n")
+cat("RMSE:", rmse_cooling, "\n")
+cat("MAE:", mae_cooling, "\n")
+cat("R-squared:", r2_cooling, "\n")
+
+# Create and display a dataframe with actual and predicted values for July
+july_comparison <- test_data %>%
+  select(time, Heating, predicted_heating, Cooling, predicted_cooling)
+print(july_comparison)
+
+```
+
+
+```{r}
+# Load the necessary libraries
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(Metrics)
+
+# Load the training dataset
+train_data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/Cleaned_Merged_Dataset.csv")
+
+# Convert the 'time' column to a datetime format
+train_data$time <- as.POSIXct(train_data$time, format = "%Y-%m-%d %H:%M:%S")
+
+# Ensure that HVAC types and other categorical variables are factors
+train_data$in.hvac_cooling_type <- as.factor(train_data$in.hvac_cooling_type)
+train_data$in.hvac_heating_type <- as.factor(train_data$in.hvac_heating_type)
+train_data$in.hvac_has_ducts <- as.factor(train_data$in.hvac_has_ducts)
+
+# Check each factor variable to make sure it has more than one level
+factor_vars <- c("in.hvac_cooling_type", "in.hvac_heating_type", "in.hvac_has_ducts")
+
+# Print the number of levels for each factor
+for (var in factor_vars) {
+  cat(var, "levels:", nlevels(train_data[[var]]), "\n")
+}
+
+# Filter out factor variables with just one level from the model
+factor_vars_to_keep <- factor_vars[sapply(train_data[factor_vars], nlevels) > 1]
+formula_vars <- c("time", "Heating", "Cooling", "Dry.Bulb.Temperature...C.", "Relative.Humidity....",
+                  "Wind.Speed..m.s.", "Global.Horizontal.Radiation..W.m2.", "Direct.Normal.Radiation..W.m2.",
+                  "Diffuse.Horizontal.Radiation..W.m2.", "in.sqft", "in.bedrooms", "in.geometry_stories",
+                  "in.hvac_heating_efficiency", "in.hvac_cooling_efficiency", "in.hvac_has_ducts")
+
+# Add the selected factor variables to the formula variables
+formula_vars <- c(formula_vars, factor_vars_to_keep)
+
+# Create the regression formula for total_energy
+regression_formula_total_energy <- as.formula(paste("total_energy ~", paste(formula_vars, collapse = " + ")))
+
+# Split the training dataset
+train_data <- train_data %>% 
+  mutate(Month = month(time)) %>%
+  filter(Month != 7)
+
+# Load the new test dataset for July with the increased temperature
+test_data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/test_july_increased.csv")
+test_data$time <- as.POSIXct(test_data$time, format = "%Y-%m-%d %H:%M:%S")
+
+# Ensure consistency of factor levels between train and test data
+for (var in factor_vars_to_keep) {
+  levels(test_data[[var]]) <- levels(train_data[[var]])
+}
+
+# Build the model using the train_data
+model_total_energy <- lm(regression_formula_total_energy, data = train_data)
+
+# Make predictions on the test_data
+test_data$predicted_total_energy <- predict(model_total_energy, newdata = test_data)
+
+# Visualization for Total Energy
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = total_energy), color = 'blue') +
+  geom_line(aes(y = predicted_total_energy), color = 'red') +
+  labs(title = "Actual vs Predicted Total Energy Consumption for July",
+       x = "Time", y = "Total Energy (kWh)") +
+  theme_minimal()
+
+# Metrics calculation for Total Energy
+actual_total_energy <- test_data$total_energy
+predicted_total_energy <- test_data$predicted_total_energy
+mse_total_energy <- mse(actual_total_energy, predicted_total_energy)
+rmse_total_energy <- sqrt(mse_total_energy)
+mae_total_energy <- mae(actual_total_energy, predicted_total_energy)
+r2_total_energy <- cor(actual_total_energy, predicted_total_energy)^2
+
+# Output the metrics
+cat("Total Energy Model Metrics with Increased Temperature:\n")
+cat("MSE:", mse_total_energy, "\n")
+cat("RMSE:", rmse_total_energy, "\n")
+cat("MAE:", mae_total_energy, "\n")
+cat("R-squared:", r2_total_energy, "\n")
+
+# Create and display a dataframe with actual and predicted values for July
+july_comparison <- test_data %>%
+  select(time, total_energy, predicted_total_energy)
+print(july_comparison)
+
+```
+
+```{r}
+# Visualization for Predicted Total Energy with Peak Highlight
+ggplot(test_data, aes(x = time, y = predicted_total_energy)) +
+  geom_line(color = 'blue') +
+  geom_point(data = test_data %>% filter(predicted_total_energy == max(predicted_total_energy)), aes(color = "Peak Energy"), size = 3) +
+  labs(title = "Predicted Total Energy Consumption for July",
+       x = "Time", y = "Predicted Total Energy (kWh)") +
+  scale_color_manual(values = c("Peak Energy" = "red", "Other" = "black")) +
+  theme_minimal()
+
+# Find the date and time with the highest predicted total energy consumed
+peak_time <- test_data %>%
+  filter(predicted_total_energy == max(predicted_total_energy)) %>%
+  select(time, predicted_total_energy)
+
+cat("Date and Time with the Highest Predicted Total Energy Consumption:\n")
+print(peak_time)
+
+
+```
+
+
+
+```{r}
+# Load the necessary libraries
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(xgboost)
+library(caret)  # for data scaling
+
+# Load the dataset
+data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/Cleaned_Merged_Dataset.csv")
+
+# Convert the 'time' column to a datetime format
+data$time <- as.POSIXct(data$time, format = "%Y-%m-%d %H:%M:%S")
+
+# Explicitly convert all categorical variables to numeric
+categorical_vars <- c("in.hvac_cooling_type", "in.hvac_heating_type", "in.hvac_has_ducts")
+data[categorical_vars] <- lapply(data[categorical_vars], function(x) as.numeric(as.factor(x)))
+
+# Create a new column 'Month' to filter by
+data <- mutate(data, Month = month(time))
+
+# Splitting the dataset
+train_data <- filter(data, Month != 7)
+test_data <- filter(data, Month == 7)
+
+# Identifying numeric variables for scaling
+numeric_vars <- setdiff(names(train_data), c("time", "Month", "Heating", "Cooling"))
+# Ensure all variables are indeed numeric
+train_data[numeric_vars] <- sapply(train_data[numeric_vars], as.numeric)
+test_data[numeric_vars] <- sapply(test_data[numeric_vars], as.numeric)
+
+# Scaling the data
+pre_proc_values <- preProcess(train_data[, numeric_vars, drop = FALSE], method = c("center", "scale"))
+train_data_scaled <- predict(pre_proc_values, train_data[, numeric_vars, drop = FALSE])
+test_data_scaled <- predict(pre_proc_values, test_data[, numeric_vars, drop = FALSE])
+
+# Reattach the non-scaled and non-numeric data
+train_data_final <- bind_cols(train_data_scaled, select(train_data, time, Heating, Cooling))
+test_data_final <- bind_cols(test_data_scaled, select(test_data, time, Heating, Cooling))
+
+# Convert all factor columns to numeric explicitly for safety
+train_data_final <- data.frame(lapply(train_data_final, function(x) if(is.factor(x)) as.numeric(as.character(x)) else x))
+test_data_final <- data.frame(lapply(test_data_final, function(x) if(is.factor(x)) as.numeric(as.character(x)) else x))
+
+# Prepare matrices for xgboost
+dtrain_heating <- xgb.DMatrix(data = as.matrix(select(train_data_final, -c(time, Heating, Cooling))), label = train_data_final$Heating)
+dtrain_cooling <- xgb.DMatrix(data = as.matrix(select(train_data_final, -c(time, Heating, Cooling))), label = train_data_final$Cooling)
+dtest <- xgb.DMatrix(data = as.matrix(select(test_data_final, -c(time, Heating, Cooling))))
+
+# Train the model
+param <- list(max_depth = 3, eta = 0.1, silent = 1, objective = "reg:squarederror", nthread = 2)
+nrounds <- 100
+
+model_xgb_heating <- xgb.train(params = param, data = dtrain_heating, nrounds = nrounds)
+model_xgb_cooling <- xgb.train(params = param, data = dtrain_cooling, nrounds = nrounds)
+
+# Make predictions for the test set (July)
+test_data_final$predicted_heating <- predict(model_xgb_heating, dtest)
+test_data_final$predicted_cooling <- predict(model_xgb_cooling, dtest)
+
+# Visualization for Heating
+ggplot(test_data_final, aes(x = time)) +
+  geom_line(aes(y = Heating), color = 'blue') +
+  geom_line(aes(y = predicted_heating), color = 'red', linetype = "dashed") +
+  labs(title = "Actual vs Predicted Heating Energy Consumption for July",
+       x = "Time", y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Visualization for Cooling
+ggplot(test_data_final, aes(x = time)) +
+  geom_line(aes(y = Cooling), color = 'green') +
+  geom_line(aes(y = predicted_cooling), color = 'orange', linetype = "dashed") +
+  labs(title = "Actual vs Predicted Cooling Energy Consumption for July",
+       x = "Time", y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Calculate metrics
+actual_heating <- test_data_final$Heating
+predicted_heating <- test_data_final$predicted_heating
+mse_heating <- mean((predicted_heating - actual_heating)^2)
+rmse_heating <- sqrt(mse_heating)
+mae_heating <- mean(abs(predicted_heating - actual_heating))
+r2_heating <- cor(actual_heating, predicted_heating)^2
+
+actual_cooling <- test_data_final$Cooling
+predicted_cooling <- test_data_final$predicted_cooling
+mse_cooling <- mean((predicted_cooling - actual_cooling)^2)
+rmse_cooling <- sqrt(mse_cooling)
+mae_cooling <- mean(abs(predicted_cooling - actual_cooling))
+r2_cooling <- cor(actual_cooling, predicted_cooling)^2
+
+# Print metrics
+cat("Heating Model Metrics:\n")
+cat("MSE:", mse_heating, "\n")
+cat("RMSE:", rmse_heating, "\n")
+cat("MAE:", mae_heating, "\n")
+cat("R-squared:", r2_heating, "\n\n")
+
+cat("Cooling Model Metrics:\n")
+cat("MSE:", mse_cooling, "\n")
+cat("RMSE:", rmse_cooling, "\n")
+cat("MAE:", mae_cooling, "\n")
+cat("R-squared:", r2_cooling, "\n")
+
+# Create and display a dataframe with actual and predicted values for July
+july_comparison <- select(test_data_final, time, Heating, predicted_heating, Cooling, predicted_cooling)
+print(july_comparison)
+
+```
+
+
+
+```{r}
+# Load the necessary libraries
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(xgboost)
+library(Metrics)
+
+# Load the training dataset
+train_data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/Cleaned_Merged_Dataset.csv")
+
+# Convert the 'time' column to a datetime format
+train_data$time <- as.POSIXct(train_data$time, format = "%Y-%m-%d %H:%M:%S")
+
+# Ensure that HVAC types and other categorical variables are factors
+train_data$in.hvac_cooling_type <- as.factor(train_data$in.hvac_cooling_type)
+train_data$in.hvac_heating_type <- as.factor(train_data$in.hvac_heating_type)
+train_data$in.hvac_has_ducts <- as.factor(train_data$in.hvac_has_ducts)
+
+# Create a 'Month' column to filter the data
+train_data <- train_data %>%
+  mutate(Month = month(time)) %>%
+  select(-Month)  # Remove Month from data to avoid leakage
+
+# Load the new test dataset for July with the increased temperature
+test_data <- read_csv("C:/Users/puroh/OneDrive/Documents/IDS/Final/test_july_increased.csv")
+test_data$time <- as.POSIXct(test_data$time, format = "%Y-%m-%d %H:%M:%S")
+test_data$`Dry.Bulb.Temperature...C.` <- test_data$`Dry.Bulb.Temperature...C.` + 5
+
+# Convert test data factors using train data's levels to ensure consistency
+test_data$in.hvac_cooling_type <- factor(test_data$in.hvac_cooling_type, levels = levels(train_data$in.hvac_cooling_type))
+test_data$in.hvac_heating_type <- factor(test_data$in.hvac_heating_type, levels = levels(train_data$in.hvac_heating_type))
+test_data$in.hvac_has_ducts <- factor(test_data$in.hvac_has_ducts, levels = levels(train_data$in.hvac_has_ducts))
+
+# Check for any factor with only one level and remove such factors from the model
+factor_vars <- c("in.hvac_cooling_type", "in.hvac_heating_type", "in.hvac_has_ducts")
+factor_vars_to_keep <- sapply(factor_vars, function(var) {
+  if (nlevels(factor(train_data[[var]])) > 1) return(var)
+  else {
+    train_data[[var]] <- NULL  # remove factors with one level from train_data
+    test_data[[var]] <- NULL  # remove factors with one level from test_data
+    NULL  # do not keep this factor in the model
+  }
+})
+
+# Create the regression formulas
+formula_vars <- c("time", "electricity", "fuel", "natural_gas", "propane", "total_energy", 
+                  "Dry.Bulb.Temperature...C.", "Relative.Humidity....", "Wind.Speed..m.s.",
+                  "in.sqft", "in.bedrooms", "in.geometry_stories", "in.hvac_heating_efficiency",
+                  "in.hvac_cooling_efficiency", "in.occupants", factor_vars_to_keep)
+
+regression_formula_heating <- as.formula(paste("Heating ~", paste(formula_vars, collapse = " + ")))
+regression_formula_cooling <- as.formula(paste("Cooling ~", paste(formula_vars, collapse = " + ")))
+
+# Build the models using the train_data
+model_heating <- lm(regression_formula_heating, data = train_data)
+model_cooling <- lm(regression_formula_cooling, data = train_data)
+
+# Make predictions on the test_data
+test_data$predicted_heating <- predict(model_heating, newdata = test_data)
+test_data$predicted_cooling <- predict(model_cooling, newdata = test_data)
+
+# Visualization for Heating
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = Heating), color = 'blue') +
+  geom_line(aes(y = predicted_heating), color = 'red', linetype = "dashed") +
+  labs(title = "Actual vs Predicted Heating Energy Consumption for July",
+       x = "Time", y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Visualization for Cooling
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = Cooling), color = 'green') +
+  geom_line(aes(y = predicted_cooling), color = 'orange', linetype = "dashed") +
+  labs(title = "Actual vs Predicted Cooling Energy Consumption for July",
+       x = "Time", y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Calculate metrics
+actual_heating <- test_data$Heating
+predicted_heating <- test_data$predicted_heating
+mse_heating <- mse(actual_heating, predicted_heating)
+rmse_heating <- sqrt(mse_heating)
+mae_heating <- mae(actual_heating, predicted_heating)
+r2_heating <- cor(actual_heating, predicted_heating)^2
+
+actual_cooling <- test_data$Cooling
+predicted_cooling <- test_data$predicted_cooling
+mse_cooling <- mse(actual_cooling, predicted_cooling)
+rmse_cooling <- sqrt(mse_cooling)
+mae_cooling <- mae(actual_cooling, predicted_cooling)
+r2_cooling <- cor(actual_cooling, predicted_cooling)^2
+
+# Output the metrics
+cat("Heating Model Metrics:\n")
+cat("MSE:", mse_heating, "\n")
+cat("RMSE:", rmse_heating, "\n")
+cat("MAE:", mae_heating, "\n")
+cat("R-squared:", r2_heating, "\n\n")
+
+cat("Cooling Model Metrics:\n")
+cat("MSE:", mse_cooling, "\n")
+cat("RMSE:", rmse_cooling, "\n")
+cat("MAE:", mae_cooling, "\n")
+cat("R-squared:", r2_cooling, "\n")
+
+# Create and display a dataframe with actual and predicted values for July
+july_comparison <- select(test_data, time, Heating, predicted_heating, Cooling, predicted_cooling)
+print(july_comparison)
+
+```
+
+
+```{r}
+# Visualization for Predicted Heating Energy
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = Heating), color = 'blue') +
+  geom_line(aes(y = predicted_heating), color = 'red', linetype = "dashed") +
+  labs(title = "Actual vs Predicted Heating Energy Consumption for July",
+       x = "Time", y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Visualization for Predicted Cooling Energy
+ggplot(test_data, aes(x = time)) +
+  geom_line(aes(y = Cooling), color = 'green') +
+  geom_line(aes(y = predicted_cooling), color = 'orange', linetype = "dashed") +
+  labs(title = "Actual vs Predicted Cooling Energy Consumption for July",
+       x = "Time", y = "Energy Consumption (kWh)") +
+  theme_minimal()
+
+# Find the peak predicted heating energy consumed with the date
+peak_heating_time <- test_data %>%
+  filter(predicted_heating == max(predicted_heating)) %>%
+  select(time, predicted_heating)
+
+cat("Date and Time with the Highest Predicted Heating Energy Consumption:\n")
+print(peak_heating_time)
+
+# Find the peak predicted cooling energy consumed with the date
+peak_cooling_time <- test_data %>%
+  filter(predicted_cooling == max(predicted_cooling)) %>%
+  select(time, predicted_cooling)
+
+cat("Date and Time with the Highest Predicted Cooling Energy Consumption:\n")
+print(peak_cooling_time)
+
+#temperature 33.3 for date 2018-07-04 09:00:00
+
+#temperature 36.7 for date 2018-07-23 15:00:00
+
+```
+
+
+```{r}
+# Load the necessary library
+library(readr)
+
+# Define the paths to the datasets
+train_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Final/train.csv"
+test_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Final/test_july_increased.csv"
+
+# Load the datasets
+train_data <- read_csv(train_path)
+test_data <- read_csv(test_path)
+
+# Merge the datasets
+combined_data <- bind_rows(train_data, test_data)
+
+# Save the combined dataset to the same location
+write_csv(combined_data, "C:/Users/puroh/OneDrive/Documents/IDS/Final/combined_dataset.csv")
+
+# Output to confirm the save
+cat("Combined dataset saved at 'C:/Users/puroh/OneDrive/Documents/IDS/Final/combined_dataset.csv'\n")
+
+```
+
+```{r}
+# Load the necessary libraries
+library(readr)
+library(ggplot2)
+library(lubridate)
+
+# Load the combined dataset
+combined_data_path <- "C:/Users/puroh/OneDrive/Documents/IDS/Final/combined_dataset.csv"
+combined_data <- read_csv(combined_data_path)
+
+# Convert the 'time' column to a datetime format, if it's not already
+combined_data$time <- as.POSIXct(combined_data$time, format = "%Y-%m-%d %H:%M:%S")
+
+# Create a ggplot to visualize total_energy vs time
+ggplot(combined_data, aes(x = time, y = total_energy)) +
+  geom_line() +  # Using a line plot
+  labs(title = "Total Energy Consumption Over Time",
+       x = "Time",
+       y = "Total Energy (kWh)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Improve x-axis label readability
+
+# Optionally, save the plot
+ggsave("C:/Users/puroh/OneDrive/Documents/IDS/Final/energy_time_plot.png", width = 10, height = 6)
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
